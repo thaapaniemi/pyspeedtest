@@ -1,31 +1,39 @@
 import urllib, httplib
+#import urllib2
 import getopt, sys
 from time import time
 import random
+from random import choice
+
 from threading import Thread, currentThread
 from math import pow, sqrt
 import bisect
 import re
+from xml.dom import minidom
+
+#TODO: Replace urllib
 
 class Speedtest:
-	HOST = 'speedtest-po.vodafone.pt'
-	RUNS = 2
-	VERBOSE = 0
-	HTTPDEBUG = 0
+	_host = None
+	_runs = 2
+	_verbose = 0
+	_httpdebug = 0
 	
-	DOWNLOAD_FILES = [
+	_download_files = [
 	'/speedtest/random350x350.jpg',
 	'/speedtest/random500x500.jpg',
 	'/speedtest/random1500x1500.jpg',
 	]
 	
-	UPLOAD_FILES = [
+	_upload_files = [
 	132884,
 	493638
 	]
 	
+	_servers = None
+	
 	def printv(self,msg):
-		if self.VERBOSE : print msg
+		if self._verbose : print msg
 	
 	def downloadthread(self,connection, url):
 		connection.request('GET', url, None, { 'Connection': 'Keep-Alive'})
@@ -36,15 +44,15 @@ class Speedtest:
 	def download(self):
 		total_downloaded = 0
 		connections = []
-		for run in range(self.RUNS):
-			connection = httplib.HTTPConnection(self.HOST)
-			connection.set_debuglevel(self.HTTPDEBUG)
+		for run in range(self._runs):
+			connection = httplib.HTTPConnection(self._host)
+			connection.set_debuglevel(self._httpdebug)
 			connection.connect()
 			connections.append(connection)
 		total_start_time = time()
-		for current_file in self.DOWNLOAD_FILES:
+		for current_file in self._download_files:
 			threads = []
-			for run in range(self.RUNS):
+			for run in range(self._runs):
 				thread = Thread(target = self.downloadthread, args = (connections[run], current_file + '?x=' + str(int(time() * 1000))))
 				thread.run_number = run
 				thread.start()
@@ -69,15 +77,15 @@ class Speedtest:
 	
 	def upload(self):
 		connections = []
-		for run in range(self.RUNS):
-			connection = httplib.HTTPConnection(self.HOST)
-			connection.set_debuglevel(self.HTTPDEBUG)
+		for run in range(self._runs):
+			connection = httplib.HTTPConnection(self._host)
+			connection.set_debuglevel(self._httpdebug)
 			connection.connect()
 			connections.append(connection)
 			
 		post_data = []
 		ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		for current_file_size in self.UPLOAD_FILES:
+		for current_file_size in self._upload_files:
 			values = {'content0' : ''.join(random.choice(ALPHABET) for i in range(current_file_size)) }
 			post_data.append(urllib.urlencode(values))
 			
@@ -85,7 +93,7 @@ class Speedtest:
 		total_start_time = time()
 		for data in post_data:
 			threads = []
-			for run in range(self.RUNS):
+			for run in range(self._runs):
 				thread = Thread(target = self.uploadthread, args = (connections[run], data))
 				thread.run_number = run
 				thread.start()
@@ -100,9 +108,11 @@ class Speedtest:
 		self.printv('Took %d ms to upload %d bytes' % (total_ms, total_uploaded))
 		return (total_uploaded * 8000 / total_ms)
 	
-	def ping(self,server):
-		connection = httplib.HTTPConnection(server)
-		connection.set_debuglevel(self.HTTPDEBUG)
+	def ping(self,host=None):
+		if host is None:
+			host = self._host
+		connection = httplib.HTTPConnection(host)
+		connection.set_debuglevel(self._httpdebug)
 		connection.connect()
 		times = []
 		worst = 0
@@ -118,12 +128,12 @@ class Speedtest:
 		times.remove(worst)
 		total_ms = sum(times) * 250 # * 1000 / number of tries (4) = 250
 		connection.close()
-		self.printv('Latency for %s - %d' % (server, total_ms))
+		self.printv('Latency for %s - %d' % (host, total_ms))
 		return total_ms
 	
 	def chooseserver(self):
 		connection = httplib.HTTPConnection('www.speedtest.net')
-		connection.set_debuglevel(self.HTTPDEBUG)
+		connection.set_debuglevel(self._httpdebug)
 		connection.connect()
 		now = int(time() * 1000)
 		extra_headers = {
@@ -157,11 +167,31 @@ class Speedtest:
 			#print server[1]
 			m = re.search('http://([^/]+)/speedtest/upload\.php',server[1])
 			if not m : continue
-			server_host = m.groups()[0]
-			latency = self.ping(server_host)
+			server__host = m.groups()[0]
+			latency = self.ping(server__host)
 			if latency < best_server[0]:
-				best_server = (latency, server_host)
-		self.printv('Best server: ' + best_server[1])
+				best_server = (latency, server__host)
 		return best_server[1]
+	
+	def chooseRandomServer(self):
+		if(self._servers is None):
+			self.downloadServerList()
+		return choice(self._servers)
 
+	def downloadServerList(self):
+		serverlist = []
+		# XML- list of servers http://speedtest.net/speedtest-servers.php
+		#serverXMLlist = urllib2.urlopen("http://speedtest.net/speedtest-servers.php", timeout=10).read()
+		serverXMLlist = urllib.urlopen("http://speedtest.net/speedtest-servers.php").read()
+		xmldoc = minidom.parseString(serverXMLlist)
+		itemlist = xmldoc.getElementsByTagName('server')
+		for t_url in itemlist:
+			# Clean the string
+			t_url = choice(itemlist).attributes['url'].value
+			t_url = t_url.replace("/speedtest/upload.php", "")
+			t_url = t_url.replace("http://", "")
+			t_url = t_url.split("/")[0]
+			serverlist.append(t_url)
+		self._servers = serverlist
+		
 #/Speedtest
