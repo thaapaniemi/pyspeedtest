@@ -7,6 +7,7 @@ from speedtest import Speedtest
 def main():
 	speedtest = Speedtest()
 	findserver = False
+	randomserver = False
 	mode = 7
 	
 	try:
@@ -18,13 +19,13 @@ def main():
 	
 	for o, a in opts:
 		if o == "-v":
-			speedtest.VERBOSE = 1
+			speedtest._verbose = 1
 		elif o in ("-h", "--help"):
 			usage()
 			sys.exit()
 		elif o in ("-r", "--runs"):
 			try:
-				speedtest.RUNS = int(a)
+				speedtest._runs = int(a)
 			except ValueError:
 				print 'Bad runs value'
 				sys.exit(2)
@@ -36,17 +37,21 @@ def main():
 				sys.exit(2)
 		elif o in ("-d", "--debug"):
 			try:
-				speedtest.HTTPDEBUG = int(a)
+				speedtest._httpdebug = int(a)
 			except ValueError:
 				print 'Bad debug value'
 				sys.exit(2)
 		elif o == "-s":
 			findserver = True
-		
+
+		elif o == "--random":
+			randomserver = True
+	if randomserver:
+		speedtest._host = speedtest.chooseRandomServer()	
 	if findserver:
-		speedtest.HOST = speedtest.chooseserver()
+		speedtest._host = speedtest.chooseserver()
 	if mode & 4 == 4:
-		print 'Ping: %d ms' % speedtest.ping(speedtest.HOST)
+		print 'Ping: %d ms' % speedtest.ping(speedtest._host)
 	if mode & 1 == 1:
 		print 'Download speed: ' + pretty_speed(speedtest.download())
 	if mode & 2 == 2:
@@ -73,6 +78,7 @@ optional arguments:
  -m M, --mode=M     test mode: 1 - download, 2 - upload, 4 - ping, 1 + 2 + 4 = 7 - all (default).
  -d L, --debug=L    set httpconnection debug level (default is 0).
  -s                 find best server
+ --random           select random server
 '''
 
 if __name__ == '__main__':
