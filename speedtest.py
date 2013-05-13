@@ -189,7 +189,7 @@ class Speedtest:
 		return best_server[1]
 	
 	def chooseRandomServer(self, cc=None):
-		if(self._servers is None or self._serverscc !== cc):
+		if(self._servers is None or self._serverscc != cc):
 			self._servers = self._getServerList(cc)
 			self._serverscc = cc
 		return random.choice(self._servers)
