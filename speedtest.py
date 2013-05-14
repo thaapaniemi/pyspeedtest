@@ -19,6 +19,7 @@ class SpeedtestError(Exception):
 	def __str__(self):
 		return repr(self.value)
 
+#Speedtest class
 class Speedtest:
 	_host = None
 	_runs = 2
@@ -36,19 +37,26 @@ class Speedtest:
 	493638
 	]
 	
-	# Serverlist of all? availabe Speedtest servers
+	# Serverlist of all public Speedtest servers
 	_serverscc = None
 	_servers = None
+
+	# Use best server
+	def setNearestserver(self):
+		self._host = self._setNearestServer()
+
+	# Use random server, limit by country code (ISO 3166-1 alpha-2)
+	def setRandomServer(self, cc=None):
+		if(self._servers is None or self._serverscc != cc):
+			self._servers = self._getServerList(cc)
+			self._serverscc = cc
+		self._host = random.choice(self._servers)
 	
-	def _printv(self,msg):
-		if self._verbose : print msg
-	
-	def _downloadthread(self,connection, url):
-		connection.request('GET', url, None, { 'Connection': 'Keep-Alive'})
-		response = connection.getresponse()
-		self_thread = currentThread()
-		self_thread.downloaded = len(response.read())
-	
+	# Use any server specified
+	def setServer(self, newServer):
+		self._host = newServer
+		
+	# Test download speed, returns speed in bps
 	def download(self):
 		if self._host is None:
 			self._host = self.chooseserver()
@@ -78,14 +86,7 @@ class Speedtest:
 		self._printv('Took %d ms to download %d bytes' % (total_ms, total_downloaded))
 		return (total_downloaded * 8000 / total_ms)
 	
-	def _uploadthread(self,connection, data):
-		url = '/speedtest/upload.php?x=' + str(random.random())
-		connection.request('POST', url, data, {'Connection': 'Keep-Alive', 'Content-Type': 'application/x-www-form-urlencoded'})
-		response = connection.getresponse()
-		reply = response.read()
-		self_thread = currentThread()
-		self_thread.uploaded = int(reply.split('=')[1])
-	
+	# Test upload speed, returns speed in bps
 	def upload(self):
 		if self._host is None:
 			raise SpeedtestError('Host not set.')
@@ -122,17 +123,21 @@ class Speedtest:
 		self._printv('Took %d ms to upload %d bytes' % (total_ms, total_uploaded))
 		return (total_uploaded * 8000 / total_ms)
 	
-	def ping(self,host=None):
+	#Test ping time, returns response time in ms
+	def ping(self,host=None, tries=5):
+		
+		#Set pinging to selected server if not specified
 		if host is None:
 			if self._host is None:
 				raise SpeedtestError('Host not set.')
 			host = self._host
+			
 		connection = httplib.HTTPConnection(host)
 		connection.set_debuglevel(self._httpdebug)
 		connection.connect()
 		times = []
 		worst = 0
-		for i in range(5):
+		for i in range(tries):
 			total_start_time = time()
 			connection.request('GET', '/speedtest/latency.txt?x=' + str(random.random()), None, { 'Connection': 'Keep-Alive'})
 			response = connection.getresponse()
@@ -147,7 +152,8 @@ class Speedtest:
 		self._printv('Latency for %s - %d' % (host, total_ms))
 		return total_ms
 	
-	def chooseserver(self):
+	# Automatically selects best server, returns server address
+	def _setNearestServer(self):
 		connection = httplib.HTTPConnection('www.speedtest.net')
 		connection.set_debuglevel(self._httpdebug)
 		connection.connect()
@@ -163,7 +169,7 @@ class Speedtest:
 		location = None
 		if m == None:
 			self._printv("Failed to retrieve coordinates")
-			return None
+			raise SpeedtestError('method chooseserver: Failed to retrieve coordinates')
 		location = m.groups()
 		self._printv('Your IP: %s\nYour latitude: %s\nYour longitude: %s' % location)
 		connection.request('GET', '/speedtest-servers.php?x=' + str(now), None, extra_headers)
@@ -188,12 +194,8 @@ class Speedtest:
 				best_server = (latency, server__host)
 		return best_server[1]
 	
-	def chooseRandomServer(self, cc=None):
-		if(self._servers is None or self._serverscc != cc):
-			self._servers = self._getServerList(cc)
-			self._serverscc = cc
-		return random.choice(self._servers)
-
+	# Downloads and parses list of speedtest servers, returns list
+	# Limit list by 2-letter country code
 	def _getServerList(self,cc=None):
 		serverlist = []
 		# XML- list of servers http://speedtest.net/speedtest-servers.php
@@ -214,5 +216,23 @@ class Speedtest:
 			t_url = t_url.split("/")[0]
 			serverlist.append(t_url)
 		return serverlist
+	
+	# Private function for verbose stdout printing
+	def _printv(self,msg):
+		if self._verbose : print msg
+	
+	def _downloadthread(self,connection, url):
+		connection.request('GET', url, None, { 'Connection': 'Keep-Alive'})
+		response = connection.getresponse()
+		self_thread = currentThread()
+		self_thread.downloaded = len(response.read())
+
+	def _uploadthread(self,connection, data):
+		url = '/speedtest/upload.php?x=' + str(random.random())
+		connection.request('POST', url, data, {'Connection': 'Keep-Alive', 'Content-Type': 'application/x-www-form-urlencoded'})
+		response = connection.getresponse()
+		reply = response.read()
+		self_thread = currentThread()
+		self_thread.uploaded = int(reply.split('=')[1])
 		
 #/Speedtest

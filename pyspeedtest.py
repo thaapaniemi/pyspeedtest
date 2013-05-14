@@ -6,12 +6,17 @@ from speedtest import Speedtest
 
 def main():
 	speedtest = Speedtest()
-	findserver = False
+	speedtest._host = "speedtest1.ak.ber.netsign.net"
+	
+	# Country code
+	cc = None
 	randomserver = False
+	serverlist = False
+
 	mode = 7
 	
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hr:vm:d:s", ["help", "runs=","mode=","debug="])
+		opts, args = getopt.getopt(sys.argv[1:], "hr:vm:d:s", ["help", "runs=","mode=","debug=","serverlist","server=","cc="])
 	except getopt.GetoptError, err:
 		print str(err)
 		usage()
@@ -41,17 +46,40 @@ def main():
 			except ValueError:
 				print 'Bad debug value'
 				sys.exit(2)
-		elif o == "-s":
-			findserver = True
+		elif o in ("-s", "--server"):
+			try:
+				server = str(a)
+				if a in ("AUTO", "auto"):
+					speedtest.setNearestserver()
+				elif a in ("RANDOM", "random"):
+					randomserver = True
+				else:
+					speedtest.setServer(a)
+							
+			except ValueError:
+				print 'Bad server value'
+				sys.exit(2)
+		elif o == "--cc":
+			try:
+				cc = str(a)
+			except ValueError:
+				print 'Bad country value'
+				sys.exit(2)
+		elif o == "--serverlist":
+			serverlist = True
+		####
+	
+	if randomserver == True:
+		speedtest.setRandomServer(cc)
+	if serverlist == True:
+		for i in speedtest._getServerList(cc):
+			print i
+		sys.exit(0)
+	
+	print "Server: " + str(speedtest._host)
 
-		elif o == "--random":
-			randomserver = True
-	if randomserver:
-		speedtest._host = speedtest.chooseRandomServer()	
-	if findserver:
-		speedtest._host = speedtest.chooseserver()
 	if mode & 4 == 4:
-		print 'Ping: %d ms' % speedtest.ping(speedtest._host)
+		print 'Ping: %d ms' % speedtest.ping()
 	if mode & 1 == 1:
 		print 'Download speed: ' + pretty_speed(speedtest.download())
 	if mode & 2 == 2:
@@ -67,7 +95,7 @@ def pretty_speed(speed):
 
 def usage():
 	print '''
-usage: pyspeedtest.py [-h] [-v] [-r N] [-m M] [-d L]
+usage: pyspeedtest.py [-h] [-v] [-r N] [-m M] [-d L] [--server S] [--serverlist] [--cc CC]
 
 Test your bandwidth speed using Speedtest.net servers.
 
@@ -77,8 +105,9 @@ optional arguments:
  -r N, --runs=N     use N runs (default is 2).
  -m M, --mode=M     test mode: 1 - download, 2 - upload, 4 - ping, 1 + 2 + 4 = 7 - all (default).
  -d L, --debug=L    set httpconnection debug level (default is 0).
- -s                 find best server
- --random           select random server
+ --server S         set server: S=address, BEST for best server or RANDOM for random server
+ --serverlist		print serverlist
+ --cc=CC			Set country for random server/serverlist, CC: Country code
 '''
 
 if __name__ == '__main__':
